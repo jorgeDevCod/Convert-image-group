@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Conversor de imágenes online gratuito. Convierte imágenes a WebP, PNG, JPEG y otros formatos. Optimiza tus imágenes para mejorar el SEO de tu sitio web.">
+    <meta name="keywords" content="conversor imágenes, webp, png, jpeg, optimización de imágenes, seo imágenes">
+    <title>Conversor de Imágenes - Optimiza tus imágenes para mejor SEO</title>
+    <link rel="stylesheet" href="style.css">
+    <!-- Añadir JSZip para la descarga de múltiples archivos -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+</head>
+
+<body>
+    <div class="container">
+        <header>
+            <h1>Conversor de Imágenes</h1>
+            <p>Convierte fácilmente tus imágenes a WebP y otros formatos para optimizar tu sitio web</p>
+        </header>
+
+        <section class="info-cards">
+            <div class="card">
+                <div class="card-icon">📈</div>
+                <h3>Mejora tu SEO</h3>
+                <p>El formato WebP reduce el tamaño de las imágenes en un 25-35% en comparación con JPEG o PNG sin pérdida de calidad, mejorando la velocidad de carga de tu sitio web y optimizando tu SEO.</p>
+            </div>
+
+            <div class="card">
+                <div class="card-icon">🚀</div>
+                <h3>Convierte múltiples imágenes</h3>
+                <p>Sube varias imágenes a la vez y conviértelas en lote para ahorrar tiempo. Puedes crear diferentes grupos para diferentes formatos de conversión.</p>
+            </div>
+
+            <div class="card">
+                <div class="card-icon">🔄</div>
+                <h3>Cómo usar</h3>
+                <p>1. Arrastra o selecciona imágenes<br>2. Selecciona el formato de salida<br>3. Haz clic en Convertir<br>4. Descarga tus imágenes optimizadas</p>
+            </div>
+        </section>
+
+        <div id="converter-container"></div>
+
+        <button id="add-section-btn" class="add-section-btn">
+            + Añadir Grupo de Conversión
+        </button>
+
+        <div class="toast-container" id="toast-container"></div>
+
+        <footer class="footer">
+            <p>Esta herramienta de conversión funciona completamente en el navegador. Tus imágenes no se suben a ningún servidor.</p>
+        </footer>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+
+</html>
