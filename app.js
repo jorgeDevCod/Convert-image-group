@@ -48,6 +48,18 @@ document.addEventListener( 'DOMContentLoaded', function () {
               <option value="png">PNG (Imágenes con transparencia)</option>
               <option value="gif">GIF (Animaciones)</option>
             </select>
+            
+            <div class="quality-control">
+              <label for="quality-slider-${sectionId}">Calidad de la imagen: <span id="quality-value-${sectionId}">90%</span></label>
+              <div class="slider-container">
+                <input type="range" min="1" max="100" value="90" class="quality-slider" id="quality-slider-${sectionId}">
+                <div class="quality-markers">
+                  <span>Baja</span>
+                  <span>Media</span>
+                  <span>Alta</span>
+                </div>
+              </div>
+            </div>
           </div>
           
           <div class="preview-container" id="preview-container-${sectionId}"></div>
@@ -69,6 +81,14 @@ document.addEventListener( 'DOMContentLoaded', function () {
 
         // Set up event listeners for the new section
         setupSectionEvents( sectionId );
+
+        // Set up quality slider event
+        const qualitySlider = document.getElementById( `quality-slider-${sectionId}` );
+        const qualityValue = document.getElementById( `quality-value-${sectionId}` );
+
+        qualitySlider.addEventListener( 'input', function () {
+            qualityValue.textContent = this.value + '%';
+        } );
     }
 
     // Function to set up events for a converter section
@@ -147,6 +167,7 @@ document.addEventListener( 'DOMContentLoaded', function () {
                 previewItem.className = 'preview-item';
                 previewItem.dataset.filename = file.name;
                 previewItem.dataset.originalFormat = file.type.split( '/' )[ 1 ];
+                previewItem.dataset.originalSize = file.size; // Guardar tamaño original
 
                 const previewImage = document.createElement( 'img' );
                 previewImage.className = 'preview-image';
@@ -188,13 +209,24 @@ document.addEventListener( 'DOMContentLoaded', function () {
         }
     }
 
+    // Función para obtener el tamaño en bytes de una imagen en Data URL
+    function getDataUrlSize( dataUrl ) {
+        // Calcula el tamaño aproximado de un Data URL eliminando el encabezado
+        const base64 = dataUrl.split( ',' )[ 1 ];
+        const binarySize = Math.ceil( base64.length * 3 / 4 );
+        return binarySize;
+    }
+
     // Function to convert a single image
     function convertImage( previewItem, sectionId, downloadImmediately = false ) {
         const formatSelect = document.getElementById( `format-select-${sectionId}` );
+        const qualitySlider = document.getElementById( `quality-slider-${sectionId}` );
         const targetFormat = formatSelect.value;
+        const quality = qualitySlider.value / 100; // Convertir de 0-100 a 0-1 para canvas
         const img = previewItem.querySelector( '.preview-image' );
         const originalFormat = previewItem.dataset.originalFormat;
         const filename = previewItem.dataset.filename;
+        const originalSize = parseInt( previewItem.dataset.originalSize, 10 );
 
         // Check if image is already in target format
         if ( originalFormat.toLowerCase() === targetFormat ) {
@@ -220,7 +252,7 @@ document.addEventListener( 'DOMContentLoaded', function () {
         switch ( targetFormat ) {
             case 'webp':
                 mimeType = 'image/webp';
-                convertedImage = canvas.toDataURL( mimeType, 0.9 );
+                convertedImage = canvas.toDataURL( mimeType, quality );
                 break;
             case 'jpeg':
                 mimeType = 'image/jpeg';
@@ -228,7 +260,7 @@ document.addEventListener( 'DOMContentLoaded', function () {
                 ctx.fillStyle = '#FFFFFF';
                 ctx.fillRect( 0, 0, canvas.width, canvas.height );
                 ctx.drawImage( img, 0, 0 );
-                convertedImage = canvas.toDataURL( mimeType, 0.9 );
+                convertedImage = canvas.toDataURL( mimeType, quality );
                 break;
             case 'png':
                 mimeType = 'image/png';
@@ -240,8 +272,13 @@ document.addEventListener( 'DOMContentLoaded', function () {
                 break;
             default:
                 mimeType = 'image/webp';
-                convertedImage = canvas.toDataURL( mimeType, 0.9 );
+                convertedImage = canvas.toDataURL( mimeType, quality );
         }
+
+        // Calcula el nuevo tamaño y la reducción
+        const newSize = getDataUrlSize( convertedImage );
+        const sizeDifference = originalSize - newSize;
+        const percentReduction = ( sizeDifference / originalSize * 100 ).toFixed( 2 );
 
         // Extract file name without extension
         const fileBaseName = filename.replace( /\.[^/.]+$/, "" );
@@ -258,14 +295,18 @@ document.addEventListener( 'DOMContentLoaded', function () {
             downloadLink.click();
             document.body.removeChild( downloadLink );
 
-            showToast( `Imagen convertida a ${targetFormat.toUpperCase()} exitosamente.` );
+            showToast( `Imagen convertida a ${targetFormat.toUpperCase()} exitosamente. Reducción: ${percentReduction}%` );
         }
 
         return {
             src: convertedImage,
             filename: newFilename,
             format: targetFormat,
-            originalFilename: filename
+            originalFilename: filename,
+            originalSize: originalSize,
+            newSize: newSize,
+            sizeDifference: sizeDifference,
+            percentReduction: percentReduction
         };
     }
 
@@ -284,6 +325,12 @@ document.addEventListener( 'DOMContentLoaded', function () {
 
         // Clear previous converted images
         convertedContainer.innerHTML = '';
+
+        // Eliminar resumen de ahorro anterior si existe
+        const existingSummary = convertedSection.querySelector( '.savings-summary' );
+        if ( existingSummary ) {
+            existingSummary.remove();
+        }
 
         // Set button to loading state
         convertBtn.classList.add( 'processing' );
@@ -316,11 +363,42 @@ document.addEventListener( 'DOMContentLoaded', function () {
                     convertedImage.className = 'preview-image';
                     convertedImage.src = img.src;
 
+                    // Crear el indicador de ahorro con estilo atractivo
+                    const savingsBadge = document.createElement( 'div' );
+                    savingsBadge.className = 'savings-badge';
+
+                    // Determinar clase para el color basado en el porcentaje de reducción
+                    let savingsClass = 'savings-low';
+                    if ( img.percentReduction > 30 ) {
+                        savingsClass = 'savings-high';
+                    } else if ( img.percentReduction > 10 ) {
+                        savingsClass = 'savings-medium';
+                    }
+
+                    savingsBadge.classList.add( savingsClass );
+                    savingsBadge.innerHTML = `<span>-${img.percentReduction}%</span>`;
+
+                    // Información detallada
                     const convertedInfo = document.createElement( 'div' );
                     convertedInfo.className = 'preview-info';
-                    convertedInfo.textContent = img.filename.length > 15 ?
+
+                    // Información básica
+                    const infoBasic = document.createElement( 'div' );
+                    infoBasic.textContent = img.filename.length > 15 ?
                         img.filename.substring( 0, 15 ) + '...' :
                         img.filename;
+
+                    // Información detallada de tamaños
+                    const infoDetails = document.createElement( 'div' );
+                    infoDetails.className = 'size-details';
+                    infoDetails.innerHTML = `
+                        <span class="original-size">Original: ${formatFileSize( img.originalSize )}</span>
+                        <span class="arrow">→</span>
+                        <span class="new-size">Nuevo: ${formatFileSize( img.newSize )}</span>
+                    `;
+
+                    convertedInfo.appendChild( infoBasic );
+                    convertedInfo.appendChild( infoDetails );
 
                     const convertedActions = document.createElement( 'div' );
                     convertedActions.className = 'preview-actions';
@@ -335,11 +413,40 @@ document.addEventListener( 'DOMContentLoaded', function () {
                     convertedActions.appendChild( downloadBtn );
 
                     convertedItem.appendChild( convertedImage );
+                    convertedItem.appendChild( savingsBadge );
                     convertedItem.appendChild( convertedInfo );
                     convertedItem.appendChild( convertedActions );
 
                     convertedContainer.appendChild( convertedItem );
                 } );
+
+                // Agregar resumen de ahorro total
+                const totalSizeOriginal = convertedImages.reduce( ( total, img ) => total + img.originalSize, 0 );
+                const totalSizeNew = convertedImages.reduce( ( total, img ) => total + img.newSize, 0 );
+                const totalSavings = totalSizeOriginal - totalSizeNew;
+                const totalSavingsPercent = ( totalSavings / totalSizeOriginal * 100 ).toFixed( 2 );
+
+                const savingsSummary = document.createElement( 'div' );
+                savingsSummary.className = 'savings-summary';
+                savingsSummary.innerHTML = `
+                    <div class="savings-title">Resumen de ahorro</div>
+                    <div class="savings-stats">
+                        <div class="savings-stat">
+                            <span class="stat-label">Tamaño original:</span>
+                            <span class="stat-value">${formatFileSize( totalSizeOriginal )}</span>
+                        </div>
+                        <div class="savings-stat">
+                            <span class="stat-label">Tamaño nuevo:</span>
+                            <span class="stat-value">${formatFileSize( totalSizeNew )}</span>
+                        </div>
+                        <div class="savings-stat total">
+                            <span class="stat-label">Ahorro total:</span>
+                            <span class="stat-value">${formatFileSize( totalSavings )} (${totalSavingsPercent}%)</span>
+                        </div>
+                    </div>
+                `;
+
+                convertedSection.insertBefore( savingsSummary, document.getElementById( `download-all-btn-${sectionId}` ) );
             }
 
             // Reset button state
@@ -359,6 +466,50 @@ document.addEventListener( 'DOMContentLoaded', function () {
         document.body.removeChild( downloadLink );
 
         showToast( `Descargando ${filename}` );
+    }
+
+    // Mejora en el cálculo de reducción de tamaño
+    function calcularReduccion( tamañoOriginal, nuevoTamaño ) {
+        const reduccion = ( ( tamañoOriginal - nuevoTamaño ) / tamañoOriginal * 100 );
+        return Math.max( 0, reduccion.toFixed( 2 ) );
+    }
+
+    // Clasificación de ahorro con colores
+    function obtenerClaseSahorro( porcentaje ) {
+        if ( porcentaje > 50 ) return 'savings-high';
+        if ( porcentaje > 20 ) return 'savings-medium';
+        return 'savings-low';
+    }
+
+    // Mejora visual del indicador de ahorro
+    function agregarIndicadorAhorro( elementoPrevia, porcentajeReduccion ) {
+        const indicadorAhorro = document.createElement( 'div' );
+        indicadorAhorro.className = 'savings-indicator';
+
+        const barraAhorro = document.createElement( 'div' );
+        barraAhorro.className = 'savings-bar';
+
+        const rellenoAhorro = document.createElement( 'div' );
+        rellenoAhorro.className = 'savings-fill';
+        rellenoAhorro.style.width = `${Math.min( 100, porcentajeReduccion )}%`;
+        rellenoAhorro.style.backgroundColor = obtenerColorAhorro( porcentajeReduccion );
+
+        const porcentajeAhorro = document.createElement( 'div' );
+        porcentajeAhorro.className = 'savings-percent';
+        porcentajeAhorro.textContent = `${porcentajeReduccion.toFixed( 1 )}%`;
+
+        barraAhorro.appendChild( rellenoAhorro );
+        indicadorAhorro.appendChild( barraAhorro );
+        indicadorAhorro.appendChild( porcentajeAhorro );
+
+        elementoPrevia.appendChild( indicadorAhorro );
+    }
+
+    // Función para obtener color del ahorro
+    function obtenerColorAhorro( porcentaje ) {
+        if ( porcentaje > 50 ) return '#4caf50';   // Verde intenso
+        if ( porcentaje > 20 ) return '#ffa726';   // Naranja
+        return '#78909c';  // Gris
     }
 
     // Function to download all converted images in a section
