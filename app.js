@@ -410,7 +410,19 @@ document.addEventListener( 'DOMContentLoaded', function () {
                         downloadSingleImage( img.src, img.filename );
                     } );
 
+                    // Nuevo botón de eliminar
+                    const deleteBtn = document.createElement( 'button' );
+                    deleteBtn.className = 'preview-btn delete';
+                    deleteBtn.textContent = 'Eliminar';
+                    deleteBtn.addEventListener( 'click', function () {
+                        convertedItem.remove();
+
+                        // Opcional: Actualizar el resumen de ahorros si se elimina una imagen
+                        updateSavingsSummary( sectionId );
+                    } );
+
                     convertedActions.appendChild( downloadBtn );
+                    convertedActions.appendChild( deleteBtn );
 
                     convertedItem.appendChild( convertedImage );
                     convertedItem.appendChild( savingsBadge );
@@ -419,6 +431,52 @@ document.addEventListener( 'DOMContentLoaded', function () {
 
                     convertedContainer.appendChild( convertedItem );
                 } );
+
+                // Función para actualizar el resumen de ahorros
+                function updateSavingsSummary( sectionId ) {
+                    const convertedContainer = document.getElementById( `converted-container-${sectionId}` );
+                    const convertedItems = convertedContainer.querySelectorAll( '.converted-item' );
+                    const convertedSection = document.getElementById( `converted-section-${sectionId}` );
+
+                    if ( convertedItems.length === 0 ) {
+                        // Si no quedan imágenes, ocultar la sección de convertidas
+                        convertedSection.style.display = 'none';
+                        return;
+                    }
+
+                    // Recalcular los ahorros con las imágenes restantes
+                    const convertedImages = Array.from( convertedItems ).map( item => ( {
+                        originalSize: parseInt( item.dataset.originalSize ),
+                        newSize: parseInt( item.dataset.newSize )
+                    } ) );
+
+                    const totalSizeOriginal = convertedImages.reduce( ( total, img ) => total + img.originalSize, 0 );
+                    const totalSizeNew = convertedImages.reduce( ( total, img ) => total + img.newSize, 0 );
+                    const totalSavings = totalSizeOriginal - totalSizeNew;
+                    const totalSavingsPercent = ( totalSavings / totalSizeOriginal * 100 ).toFixed( 2 );
+
+                    // Actualizar el resumen de ahorros existente
+                    const existingSavingsSummary = convertedSection.querySelector( '.savings-summary' );
+                    if ( existingSavingsSummary ) {
+                        existingSavingsSummary.innerHTML = `
+            <div class="savings-title">Resumen de ahorro</div>
+            <div class="savings-stats">
+                <div class="savings-stat">
+                    <span class="stat-label">Tamaño original:</span>
+                    <span class="stat-value">${formatFileSize( totalSizeOriginal )}</span>
+                </div>
+                <div class="savings-stat">
+                    <span class="stat-label">Tamaño nuevo:</span>
+                    <span class="stat-value">${formatFileSize( totalSizeNew )}</span>
+                </div>
+                <div class="savings-stat total">
+                    <span class="stat-label">Ahorro total:</span>
+                    <span class="stat-value">${formatFileSize( totalSavings )} (${totalSavingsPercent}%)</span>
+                </div>
+            </div>
+        `;
+                    }
+                }
 
                 // Agregar resumen de ahorro total
                 const totalSizeOriginal = convertedImages.reduce( ( total, img ) => total + img.originalSize, 0 );

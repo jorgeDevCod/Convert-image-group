@@ -654,6 +654,14 @@ p {
 .stat-label {
   margin-right: 1rem;
 }
+
+.preview-btn.delete {
+  background-color: var(--accent);
+}
+
+.preview-btn.delete:hover {
+  opacity: 0.9;
+}
 .arrow {
   margin: 0 0.3rem;
   color: var(--primary);
