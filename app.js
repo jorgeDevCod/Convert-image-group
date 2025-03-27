@@ -138,7 +138,17 @@ document.addEventListener( 'DOMContentLoaded', function () {
 
         // Convert button event
         convertBtn.addEventListener( 'click', function () {
-            convertAllImages( sectionId );
+            const previewContainer = document.getElementById( `preview-container-${sectionId}` );
+            const previewItems = previewContainer.querySelectorAll( '.preview-item:not(.converted)' );
+
+            if ( previewItems.length === 0 ) {
+                showToast( 'No hay imágenes para convertir.', true );
+                return;
+            }
+
+            previewItems.forEach( item => {
+                convertImage( item, sectionId );
+            } );
         } );
 
         // Download all button event
@@ -219,6 +229,12 @@ document.addEventListener( 'DOMContentLoaded', function () {
 
     // Function to convert a single image
     function convertImage( previewItem, sectionId, downloadImmediately = false ) {
+        // Verificar si la imagen ya ha sido convertida
+        if ( previewItem.classList.contains( 'converted' ) ) {
+            showToast( 'Esta imagen ya ha sido convertida.', true );
+            return null;
+        }
+
         const formatSelect = document.getElementById( `format-select-${sectionId}` );
         const qualitySlider = document.getElementById( `quality-slider-${sectionId}` );
         const targetFormat = formatSelect.value;
@@ -246,13 +262,13 @@ document.addEventListener( 'DOMContentLoaded', function () {
         ctx.drawImage( img, 0, 0 );
 
         // Convert to target format
-        let convertedImage;
+        let convertedDataUrl;
         let mimeType;
 
         switch ( targetFormat ) {
             case 'webp':
                 mimeType = 'image/webp';
-                convertedImage = canvas.toDataURL( mimeType, quality );
+                convertedDataUrl = canvas.toDataURL( mimeType, quality );
                 break;
             case 'jpeg':
                 mimeType = 'image/jpeg';
@@ -260,46 +276,122 @@ document.addEventListener( 'DOMContentLoaded', function () {
                 ctx.fillStyle = '#FFFFFF';
                 ctx.fillRect( 0, 0, canvas.width, canvas.height );
                 ctx.drawImage( img, 0, 0 );
-                convertedImage = canvas.toDataURL( mimeType, quality );
+                convertedDataUrl = canvas.toDataURL( mimeType, quality );
                 break;
             case 'png':
                 mimeType = 'image/png';
-                convertedImage = canvas.toDataURL( mimeType );
+                convertedDataUrl = canvas.toDataURL( mimeType );
                 break;
             case 'gif':
                 mimeType = 'image/gif';
-                convertedImage = canvas.toDataURL( mimeType );
+                convertedDataUrl = canvas.toDataURL( mimeType );
                 break;
             default:
                 mimeType = 'image/webp';
-                convertedImage = canvas.toDataURL( mimeType, quality );
+                convertedDataUrl = canvas.toDataURL( mimeType, quality );
         }
 
         // Calcula el nuevo tamaño y la reducción
-        const newSize = getDataUrlSize( convertedImage );
+        const newSize = getDataUrlSize( convertedDataUrl );
         const sizeDifference = originalSize - newSize;
-        const percentReduction = ( sizeDifference / originalSize * 100 ).toFixed( 2 );
+        const percentReduction = ( ( sizeDifference / originalSize ) * 100 ).toFixed( 2 );
 
         // Extract file name without extension
         const fileBaseName = filename.replace( /\.[^/.]+$/, "" );
         const newFilename = `${fileBaseName}.${targetFormat}`;
 
-        if ( downloadImmediately ) {
-            // Create download link
-            const downloadLink = document.createElement( 'a' );
-            downloadLink.href = convertedImage;
-            downloadLink.download = newFilename;
+        // Obtener el contenedor de imágenes convertidas
+        const convertedContainer = document.getElementById( `converted-container-${sectionId}` );
 
-            // Trigger download
-            document.body.appendChild( downloadLink );
-            downloadLink.click();
-            document.body.removeChild( downloadLink );
+        // Crear elemento para imagen convertida
+        const convertedItem = document.createElement( 'div' );
+        convertedItem.className = 'converted-item preview-item';
+        convertedItem.dataset.convertedSrc = convertedDataUrl;
+        convertedItem.dataset.filename = newFilename;
+        convertedItem.dataset.originalSize = originalSize;
+        convertedItem.dataset.newSize = newSize;
 
-            showToast( `Imagen convertida a ${targetFormat.toUpperCase()} exitosamente. Reducción: ${percentReduction}%` );
+        const convertedImageElement = document.createElement( 'img' );
+        convertedImageElement.className = 'preview-image';
+        convertedImageElement.src = convertedDataUrl;
+
+        // Crear insignia de ahorro
+        const savingsBadge = document.createElement( 'div' );
+        savingsBadge.className = 'savings-badge';
+
+        let savingsClass = 'savings-low';
+        if ( percentReduction > 30 ) {
+            savingsClass = 'savings-high';
+        } else if ( percentReduction > 10 ) {
+            savingsClass = 'savings-medium';
         }
 
+        savingsBadge.classList.add( savingsClass );
+        savingsBadge.innerHTML = `<span>-${percentReduction}%</span>`;
+
+        // Información detallada
+        const convertedInfo = document.createElement( 'div' );
+        convertedInfo.className = 'preview-info';
+
+        const infoBasic = document.createElement( 'div' );
+        infoBasic.textContent = newFilename.length > 15 ?
+            newFilename.substring( 0, 15 ) + '...' :
+            newFilename;
+
+        const infoDetails = document.createElement( 'div' );
+        infoDetails.className = 'size-details';
+        infoDetails.innerHTML = `
+        <span class="original-size">Original: ${formatFileSize( originalSize )}</span>
+        <span class="arrow">→</span>
+        <span class="new-size">Nuevo: ${formatFileSize( newSize )}</span>
+    `;
+
+        convertedInfo.appendChild( infoBasic );
+        convertedInfo.appendChild( infoDetails );
+
+        const convertedActions = document.createElement( 'div' );
+        convertedActions.className = 'preview-actions';
+
+        const downloadBtn = document.createElement( 'button' );
+        downloadBtn.className = 'preview-btn';
+        downloadBtn.textContent = 'Descargar';
+        downloadBtn.addEventListener( 'click', function () {
+            downloadSingleImage( convertedDataUrl, newFilename );
+        } );
+
+        const deleteBtn = document.createElement( 'button' );
+        deleteBtn.className = 'preview-btn delete';
+        deleteBtn.textContent = 'Eliminar';
+        deleteBtn.addEventListener( 'click', function () {
+            convertedItem.remove();
+            updateSavingsSummary( sectionId );
+        } );
+
+        convertedActions.appendChild( downloadBtn );
+        convertedActions.appendChild( deleteBtn );
+
+        convertedItem.appendChild( convertedImageElement );
+        convertedItem.appendChild( savingsBadge );
+        convertedItem.appendChild( convertedInfo );
+        convertedItem.appendChild( convertedActions );
+
+        // Agregar al contenedor de imágenes convertidas
+        convertedContainer.appendChild( convertedItem );
+
+        // Marcar imagen original como convertida
+        previewItem.classList.add( 'converted' );
+
+        // Mostrar sección de imágenes convertidas
+        const convertedSection = document.getElementById( `converted-section-${sectionId}` );
+        convertedSection.style.display = 'block';
+
+        // Actualizar resumen de ahorros
+        updateSavingsSummary( sectionId );
+
+        showToast( `Imagen convertida a ${targetFormat.toUpperCase()} exitosamente.` );
+
         return {
-            src: convertedImage,
+            src: convertedDataUrl,
             filename: newFilename,
             format: targetFormat,
             originalFilename: filename,
@@ -323,7 +415,7 @@ document.addEventListener( 'DOMContentLoaded', function () {
             return;
         }
 
-        // Clear previous converted images
+        // Limpiar contenedor de imágenes convertidas
         convertedContainer.innerHTML = '';
 
         // Eliminar resumen de ahorro anterior si existe
@@ -332,14 +424,14 @@ document.addEventListener( 'DOMContentLoaded', function () {
             existingSummary.remove();
         }
 
-        // Set button to loading state
+        // Establecer botón en estado de carga
         convertBtn.classList.add( 'processing' );
 
-        // Use setTimeout to prevent UI freeze
+        // Usar setTimeout para evitar bloqueo de UI
         setTimeout( () => {
             const convertedImages = [];
 
-            // Convert each image and collect results
+            // Convertir cada imagen y recopilar resultados
             previewItems.forEach( ( item ) => {
                 const result = convertImage( item, sectionId, false );
                 if ( result ) {
@@ -347,27 +439,29 @@ document.addEventListener( 'DOMContentLoaded', function () {
                 }
             } );
 
-            // If we have converted images, show them in the converted section
+            // Si hay imágenes convertidas, mostrarlas
             if ( convertedImages.length > 0 ) {
-                // Show the converted section
+                // Mostrar sección de convertidas
                 convertedSection.style.display = 'block';
 
-                // Add each converted image to the converted container
+                // Agregar cada imagen convertida al contenedor
                 convertedImages.forEach( img => {
                     const convertedItem = document.createElement( 'div' );
-                    convertedItem.className = 'preview-item converted-item';
+                    convertedItem.className = 'converted-item preview-item';
                     convertedItem.dataset.convertedSrc = img.src;
                     convertedItem.dataset.filename = img.filename;
+                    convertedItem.dataset.originalSize = img.originalSize;
+                    convertedItem.dataset.newSize = img.newSize;
 
                     const convertedImage = document.createElement( 'img' );
                     convertedImage.className = 'preview-image';
                     convertedImage.src = img.src;
 
-                    // Crear el indicador de ahorro con estilo atractivo
+                    // Crear insignia de ahorro
                     const savingsBadge = document.createElement( 'div' );
                     savingsBadge.className = 'savings-badge';
 
-                    // Determinar clase para el color basado en el porcentaje de reducción
+                    // Determinar clase de color basada en el porcentaje de reducción
                     let savingsClass = 'savings-low';
                     if ( img.percentReduction > 30 ) {
                         savingsClass = 'savings-high';
@@ -382,20 +476,18 @@ document.addEventListener( 'DOMContentLoaded', function () {
                     const convertedInfo = document.createElement( 'div' );
                     convertedInfo.className = 'preview-info';
 
-                    // Información básica
                     const infoBasic = document.createElement( 'div' );
                     infoBasic.textContent = img.filename.length > 15 ?
                         img.filename.substring( 0, 15 ) + '...' :
                         img.filename;
 
-                    // Información detallada de tamaños
                     const infoDetails = document.createElement( 'div' );
                     infoDetails.className = 'size-details';
                     infoDetails.innerHTML = `
-                        <span class="original-size">Original: ${formatFileSize( img.originalSize )}</span>
-                        <span class="arrow">→</span>
-                        <span class="new-size">Nuevo: ${formatFileSize( img.newSize )}</span>
-                    `;
+                    <span class="original-size">Original: ${formatFileSize( img.originalSize )}</span>
+                    <span class="arrow">→</span>
+                    <span class="new-size">Nuevo: ${formatFileSize( img.newSize )}</span>
+                `;
 
                     convertedInfo.appendChild( infoBasic );
                     convertedInfo.appendChild( infoDetails );
@@ -410,14 +502,11 @@ document.addEventListener( 'DOMContentLoaded', function () {
                         downloadSingleImage( img.src, img.filename );
                     } );
 
-                    // Nuevo botón de eliminar
                     const deleteBtn = document.createElement( 'button' );
                     deleteBtn.className = 'preview-btn delete';
                     deleteBtn.textContent = 'Eliminar';
                     deleteBtn.addEventListener( 'click', function () {
                         convertedItem.remove();
-
-                        // Opcional: Actualizar el resumen de ahorros si se elimina una imagen
                         updateSavingsSummary( sectionId );
                     } );
 
@@ -432,86 +521,64 @@ document.addEventListener( 'DOMContentLoaded', function () {
                     convertedContainer.appendChild( convertedItem );
                 } );
 
-                // Función para actualizar el resumen de ahorros
-                function updateSavingsSummary( sectionId ) {
-                    const convertedContainer = document.getElementById( `converted-container-${sectionId}` );
-                    const convertedItems = convertedContainer.querySelectorAll( '.converted-item' );
-                    const convertedSection = document.getElementById( `converted-section-${sectionId}` );
-
-                    if ( convertedItems.length === 0 ) {
-                        // Si no quedan imágenes, ocultar la sección de convertidas
-                        convertedSection.style.display = 'none';
-                        return;
-                    }
-
-                    // Recalcular los ahorros con las imágenes restantes
-                    const convertedImages = Array.from( convertedItems ).map( item => ( {
-                        originalSize: parseInt( item.dataset.originalSize ),
-                        newSize: parseInt( item.dataset.newSize )
-                    } ) );
-
-                    const totalSizeOriginal = convertedImages.reduce( ( total, img ) => total + img.originalSize, 0 );
-                    const totalSizeNew = convertedImages.reduce( ( total, img ) => total + img.newSize, 0 );
-                    const totalSavings = totalSizeOriginal - totalSizeNew;
-                    const totalSavingsPercent = ( totalSavings / totalSizeOriginal * 100 ).toFixed( 2 );
-
-                    // Actualizar el resumen de ahorros existente
-                    const existingSavingsSummary = convertedSection.querySelector( '.savings-summary' );
-                    if ( existingSavingsSummary ) {
-                        existingSavingsSummary.innerHTML = `
-            <div class="savings-title">Resumen de ahorro</div>
-            <div class="savings-stats">
-                <div class="savings-stat">
-                    <span class="stat-label">Tamaño original:</span>
-                    <span class="stat-value">${formatFileSize( totalSizeOriginal )}</span>
-                </div>
-                <div class="savings-stat">
-                    <span class="stat-label">Tamaño nuevo:</span>
-                    <span class="stat-value">${formatFileSize( totalSizeNew )}</span>
-                </div>
-                <div class="savings-stat total">
-                    <span class="stat-label">Ahorro total:</span>
-                    <span class="stat-value">${formatFileSize( totalSavings )} (${totalSavingsPercent}%)</span>
-                </div>
-            </div>
-        `;
-                    }
-                }
-
                 // Agregar resumen de ahorro total
-                const totalSizeOriginal = convertedImages.reduce( ( total, img ) => total + img.originalSize, 0 );
-                const totalSizeNew = convertedImages.reduce( ( total, img ) => total + img.newSize, 0 );
-                const totalSavings = totalSizeOriginal - totalSizeNew;
-                const totalSavingsPercent = ( totalSavings / totalSizeOriginal * 100 ).toFixed( 2 );
-
-                const savingsSummary = document.createElement( 'div' );
-                savingsSummary.className = 'savings-summary';
-                savingsSummary.innerHTML = `
-                    <div class="savings-title">Resumen de ahorro</div>
-                    <div class="savings-stats">
-                        <div class="savings-stat">
-                            <span class="stat-label">Tamaño original:</span>
-                            <span class="stat-value">${formatFileSize( totalSizeOriginal )}</span>
-                        </div>
-                        <div class="savings-stat">
-                            <span class="stat-label">Tamaño nuevo:</span>
-                            <span class="stat-value">${formatFileSize( totalSizeNew )}</span>
-                        </div>
-                        <div class="savings-stat total">
-                            <span class="stat-label">Ahorro total:</span>
-                            <span class="stat-value">${formatFileSize( totalSavings )} (${totalSavingsPercent}%)</span>
-                        </div>
-                    </div>
-                `;
-
-                convertedSection.insertBefore( savingsSummary, document.getElementById( `download-all-btn-${sectionId}` ) );
+                updateSavingsSummary( sectionId );
             }
 
-            // Reset button state
+            // Restablecer estado del botón
             convertBtn.classList.remove( 'processing' );
 
             showToast( `${convertedImages.length} imágenes convertidas exitosamente.` );
         }, 100 );
+    }
+
+    function updateSavingsSummary( sectionId ) {
+        const convertedContainer = document.getElementById( `converted-container-${sectionId}` );
+        const convertedItems = convertedContainer.querySelectorAll( '.converted-item' );
+        const convertedSection = document.getElementById( `converted-section-${sectionId}` );
+
+        if ( convertedItems.length === 0 ) {
+            // Si no quedan imágenes, ocultar la sección de convertidas
+            convertedSection.style.display = 'none';
+            return;
+        }
+
+        // Recalcular los ahorros con las imágenes restantes
+        const convertedImages = Array.from( convertedItems ).map( item => ( {
+            originalSize: parseInt( item.dataset.originalSize ),
+            newSize: parseInt( item.dataset.newSize )
+        } ) );
+
+        const totalSizeOriginal = convertedImages.reduce( ( total, img ) => total + img.originalSize, 0 );
+        const totalSizeNew = convertedImages.reduce( ( total, img ) => total + img.newSize, 0 );
+        const totalSavings = totalSizeOriginal - totalSizeNew;
+        const totalSavingsPercent = ( ( totalSavings / totalSizeOriginal ) * 100 ).toFixed( 2 );
+
+        // Actualizar o crear el resumen de ahorros
+        let savingsSummary = convertedSection.querySelector( '.savings-summary' );
+        if ( !savingsSummary ) {
+            savingsSummary = document.createElement( 'div' );
+            savingsSummary.className = 'savings-summary';
+            convertedSection.insertBefore( savingsSummary, document.getElementById( `download-all-btn-${sectionId}` ) );
+        }
+
+        savingsSummary.innerHTML = `
+        <div class="savings-title">Resumen de ahorro</div>
+        <div class="savings-stats">
+            <div class="savings-stat">
+                <span class="stat-label">Tamaño original:</span>
+                <span class="stat-value">${formatFileSize( totalSizeOriginal )}</span>
+            </div>
+            <div class="savings-stat">
+                <span class="stat-label">Tamaño nuevo:</span>
+                <span class="stat-value">${formatFileSize( totalSizeNew )}</span>
+            </div>
+            <div class="savings-stat total">
+                <span class="stat-label">Ahorro total:</span>
+                <span class="stat-value">${formatFileSize( totalSavings )} (${totalSavingsPercent}%)</span>
+            </div>
+        </div>
+    `;
     }
 
     // Function to download a single converted image
