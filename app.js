@@ -229,39 +229,47 @@ document.addEventListener( 'DOMContentLoaded', function () {
 
     // Function to convert a single image
     function convertImage( previewItem, sectionId, downloadImmediately = false ) {
-        // Verificar si la imagen ya ha sido convertida
-        if ( previewItem.classList.contains( 'converted' ) ) {
-            showToast( 'Esta imagen ya ha sido convertida.', true );
-            return null;
-        }
-
         const formatSelect = document.getElementById( `format-select-${sectionId}` );
         const qualitySlider = document.getElementById( `quality-slider-${sectionId}` );
         const targetFormat = formatSelect.value;
-        const quality = qualitySlider.value / 100; // Convertir de 0-100 a 0-1 para canvas
+        const quality = qualitySlider.value / 100;
         const img = previewItem.querySelector( '.preview-image' );
         const originalFormat = previewItem.dataset.originalFormat;
         const filename = previewItem.dataset.filename;
         const originalSize = parseInt( previewItem.dataset.originalSize, 10 );
 
-        // Check if image is already in target format
+        // Obtener el contenedor de imágenes convertidas
+        const convertedContainer = document.getElementById( `converted-container-${sectionId}` );
+
+        // Verificar si ya existe una imagen convertida con este nombre de archivo original
+        const existingConvertedItems = convertedContainer.querySelectorAll(
+            `.converted-item[data-original-filename="${filename}"]`
+        );
+
+        // Si ya existe una imagen convertida, mostrar error
+        if ( existingConvertedItems.length > 0 ) {
+            showToast( 'Esta imagen ya ha sido convertida anteriormente.', true );
+            return null;
+        }
+
+        // Verificar si la imagen ya está en el formato objetivo
         if ( originalFormat.toLowerCase() === targetFormat ) {
             showToast( `La imagen ya está en formato ${targetFormat.toUpperCase()}.` );
             return null;
         }
 
-        // Create canvas for conversion
+        // Crear canvas para la conversión
         const canvas = document.createElement( 'canvas' );
         const ctx = canvas.getContext( '2d' );
 
-        // Set canvas dimensions to match image
+        // Establecer dimensiones del canvas
         canvas.width = img.naturalWidth;
         canvas.height = img.naturalHeight;
 
-        // Draw image on canvas
+        // Dibujar imagen en el canvas
         ctx.drawImage( img, 0, 0 );
 
-        // Convert to target format
+        // Convertir a formato objetivo
         let convertedDataUrl;
         let mimeType;
 
@@ -272,7 +280,7 @@ document.addEventListener( 'DOMContentLoaded', function () {
                 break;
             case 'jpeg':
                 mimeType = 'image/jpeg';
-                // Fill with white background (for transparent images)
+                // Rellenar con fondo blanco para imágenes transparentes
                 ctx.fillStyle = '#FFFFFF';
                 ctx.fillRect( 0, 0, canvas.width, canvas.height );
                 ctx.drawImage( img, 0, 0 );
@@ -291,25 +299,23 @@ document.addEventListener( 'DOMContentLoaded', function () {
                 convertedDataUrl = canvas.toDataURL( mimeType, quality );
         }
 
-        // Calcula el nuevo tamaño y la reducción
+        // Calcular nuevo tamaño y reducción
         const newSize = getDataUrlSize( convertedDataUrl );
         const sizeDifference = originalSize - newSize;
         const percentReduction = ( ( sizeDifference / originalSize ) * 100 ).toFixed( 2 );
 
-        // Extract file name without extension
+        // Extraer nombre de archivo sin extensión
         const fileBaseName = filename.replace( /\.[^/.]+$/, "" );
         const newFilename = `${fileBaseName}.${targetFormat}`;
 
-        // Obtener el contenedor de imágenes convertidas
-        const convertedContainer = document.getElementById( `converted-container-${sectionId}` );
-
-        // Crear elemento para imagen convertida
+        // Crear elemento de imagen convertida
         const convertedItem = document.createElement( 'div' );
         convertedItem.className = 'converted-item preview-item';
         convertedItem.dataset.convertedSrc = convertedDataUrl;
         convertedItem.dataset.filename = newFilename;
         convertedItem.dataset.originalSize = originalSize;
         convertedItem.dataset.newSize = newSize;
+        convertedItem.dataset.originalFilename = filename; // Añadir identificador de imagen original
 
         const convertedImageElement = document.createElement( 'img' );
         convertedImageElement.className = 'preview-image';
@@ -377,9 +383,6 @@ document.addEventListener( 'DOMContentLoaded', function () {
 
         // Agregar al contenedor de imágenes convertidas
         convertedContainer.appendChild( convertedItem );
-
-        // Marcar imagen original como convertida
-        previewItem.classList.add( 'converted' );
 
         // Mostrar sección de imágenes convertidas
         const convertedSection = document.getElementById( `converted-section-${sectionId}` );
